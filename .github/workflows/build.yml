@@ -4,20 +4,34 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extrair zip
+      - name: Localizar projeto
         run: |
           mkdir -p /tmp/proj
-          for z in *.zip; do unzip -q -o "$z" -d /tmp/proj; done
-          S=$(find /tmp/proj -name settings.gradle.kts | head -1)
-          test -n "$S" || { echo "NAO ACHEI settings.gradle.kts"; exit 1; }
-          echo "PROJ=$(dirname "$S")" >> $GITHUB_ENV
+          cp -r . /tmp/proj/repo
+          # abre zips, inclusive zips dentro de zips (ate 4 niveis)
+          for i in 1 2 3 4; do
+            find /tmp/proj -name '*.zip' | while read -r z; do
+              d="${z%.zip}_extraido"
+              if [ ! -d "$d" ]; then
+                mkdir -p "$d"
+                unzip -q -o "$z" -d "$d" || true
+              fi
+            done
+          done
+          S=$(find /tmp/proj -name settings.gradle.kts -not -path '*/_extraido/*/_extraido/*' | head -1)
+          if [ -z "$S" ]; then
+            echo "NAO ACHEI settings.gradle.kts. Arquivos encontrados:"
+            find /tmp/proj -maxdepth 4 | head -50
+            exit 1
+          fi
+          echo "PROJ=$(dirname "$S")" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -34,10 +48,11 @@ jobs:
       - name: Copiar APK
         run: |
           mkdir -p out
-          find /tmp/proj -name app-debug.apk -exec cp {} out/ \;
+          find "$PROJ" -name app-debug.apk -exec cp {} out/ \;
           ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
           name: ToqueFacil-apk
           path: out/app-debug.apk
+          

@@ -16,6 +16,7 @@ jobs:
           mkdir -p /tmp/proj
           for z in *.zip; do unzip -q -o "$z" -d /tmp/proj; done
           S=$(find /tmp/proj -name settings.gradle.kts | head -1)
+          test -n "$S" || { echo "NAO ACHEI settings.gradle.kts"; exit 1; }
           echo "PROJ=$(dirname "$S")" >> $GITHUB_ENV
 
       - uses: actions/setup-java@v4
@@ -30,7 +31,13 @@ jobs:
       - name: Build
         run: gradle assembleDebug --no-daemon -p "$PROJ"
 
+      - name: Copiar APK
+        run: |
+          mkdir -p out
+          find /tmp/proj -name app-debug.apk -exec cp {} out/ \;
+          ls -la out
+
       - uses: actions/upload-artifact@v4
         with:
           name: ToqueFacil-apk
-          path: $
+          path: out/app-debug.apk
